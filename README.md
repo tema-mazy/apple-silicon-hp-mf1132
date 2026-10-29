@@ -1,12 +1,13 @@
 # apple-silicon-hp-mf1132
 
-Native Apple Silicon (arm64) printing for the USB-attached
+Native Apple Silicon (arm64) printing and scanning for the USB-attached
 **HP LaserJet Professional M1132 MFP** on macOS - no Rosetta 2, no HP plugin.
 
 HP's macOS driver for this printer is Intel-only. macOS 27 already warns that
 Intel apps running on Rosetta will not open in macOS 28, and lists HP Utility,
 hpdot4d and ScanEventHandler among them. This project replaces the print path
-with a native build of HPLIP's open-source `hpcups` filter.
+with a native build of HPLIP's open-source `hpcups` filter, and the scanner
+with a small native eSCL (AirScan) service.
 
 Background article - the problem and how it was solved:
 [HP LaserJet Professional M1132 MFP on Apple Silicon](https://meow.kyiv.ua/hp-laserjet-professional-m1132-mfp-apple-silicon-macos-driver/diy/)
@@ -17,7 +18,7 @@ Background article - the problem and how it was solved:
 |------------------------------|----------------------------------------------|
 | Printing (text, PDF, images) | Works, tested on the real printer            |
 | Manual double-sided printing | Works, tested on the real printer            |
-| Scanning                     | Not supported (HP scanner plugin is closed)  |
+| Scanning (eSCL service)      | Works with NAPS2 (ESCL driver), tested       |
 
 ## How it works
 
@@ -38,6 +39,21 @@ app -> macOS CUPS (cgpdftoraster) -> hpcups (arm64) -> ZjStream -> usb backend
   only on system libraries in `/usr/lib`.
 - Printing goes through macOS's own arm64 `usb` backend.
 
+Scanning:
+
+```
+NAPS2 / eSCL app -> http://127.0.0.1:18132/eSCL -> m1132-escl -> USB (IOUSBHost)
+```
+
+- `scanner/m1132-escl.swift` drives the scanner over USB with the M1132's
+  "Marvell" scan protocol and serves it as an eSCL (AirScan) scanner. It is
+  published over Bonjour as `_uscan._tcp` "HP LaserJet M1132 MFP (native)".
+- It accepts connections from this Mac only (`--allow-lan` shares it on the
+  network). It opens the scanner only while a scan runs, so printing is not
+  affected.
+- Colour, greyscale and black & white at 150, 300 and 600 dpi; JPEG, PDF or
+  PNG; any area of the glass (8.50 x 11.22 in).
+
 ## Requirements
 
 - Apple Silicon Mac, Xcode command line tools
@@ -52,9 +68,10 @@ app -> macOS CUPS (cgpdftoraster) -> hpcups (arm64) -> ZjStream -> usb backend
 scripts/build.sh
 ```
 
-Output: `build/out/hpcups` and `build/out/hp-laserjet_professional_m1132_mfp.ppd`.
+Output: `build/out/hpcups`, `build/out/m1132-escl` and
+`build/out/hp-laserjet_professional_m1132_mfp.ppd`.
 
-To make a release: test the build on the printer, copy both files to
+To make a release: test the build on the printer, copy the files to
 `release/`, then run
 
 ```
@@ -90,8 +107,9 @@ sudo release/install.sh
 From your own build: `sudo scripts/install-queue.sh` (same installer, using
 `build/out`).
 
-This installs the filter to `/Library/Printers/apple-silicon-hp-m1132/hpcups`
-and adds a CUPS queue `HP_M1132_native` ("HP LaserJet M1132 (native arm64)")
+This installs the scanner service (a LaunchAgent that starts at login,
+log in `/tmp/m1132-escl.log`) and the filter to
+`/Library/Printers/apple-silicon-hp-m1132/`, and adds a CUPS queue `HP_M1132_native` ("HP LaserJet M1132 (native arm64)")
 on the printer's USB URI, A4 by default. Any existing HP queue is not touched.
 The installer finds the M1132 with `lpinfo -v`; set `URI=usb://...` to pick
 one explicitly, or `QUEUE=name` for a different queue name.
@@ -105,6 +123,17 @@ Test:
 ```
 lp -d HP_M1132_native file.pdf
 ```
+
+## Scanning with NAPS2
+
+1. In NAPS2, create a profile and choose **ESCL Driver**.
+2. Pick "HP LaserJet M1132 MFP (native)" if it is listed. Otherwise choose
+   **Manual IP**: host `127.0.0.1`, port `18132`, and leave the HTTPS box
+   unticked (the service speaks plain HTTP).
+3. Use 150, 300 or 600 dpi (other values are rounded to the nearest one).
+
+Quit Image Capture and HP's own scanner app first: while HP's Intel module
+holds the scanner, the service cannot open it.
 
 ## Double-sided printing
 
@@ -125,10 +154,11 @@ the page count is odd). The PPD turns this on with `*hpManualDuplex: "1"`.
 | `src/hpjbig.c`               | Open JBIG encoder replacing HP's plugin function   |
 | `patches/*.patch`            | Patches to HPLIP 3.26.6, applied by `build.sh`    |
 | `patches/ppd/*.patch`        | Patches to the M1132 PPD (adds Duplex option)     |
+| `scanner/m1132-escl.swift`   | eSCL scanner service (USB scan protocol)          |
 | `scripts/build.sh`           | Reproducible build from the tarballs              |
 | `scripts/install-queue.sh`   | Installs `build/out` via `release/install.sh`     |
 | `scripts/make-pkg.sh`        | Builds the Installer package from `release/`      |
-| `release/`                   | Prebuilt `hpcups`, PPD, `install.sh`              |
+| `release/`                   | Prebuilt `hpcups`, `m1132-escl`, PPD, `install.sh`|
 
 HPLIP patches:
 
@@ -145,9 +175,10 @@ HPLIP patches:
 
 ## Known limits
 
-- Scanning needs HP's closed Marvell scan plugin (`bb_marvell`), which exists
-  only for Linux. Options: keep HP's scanner app while Rosetta lasts, or run
-  HPLIP + AirSane on a Linux box and scan over the network (eSCL).
+- NAPS2's ESCL auto-discovery may not list the scanner (it uses its own mDNS
+  client); Manual IP always works. Image Capture and NAPS2's Apple driver
+  are not tested yet. 1200 dpi is not offered (untested on the device).
+  Brightness and contrast settings are ignored.
 - CUPS reports PPD printer drivers as deprecated. If a future macOS drops
   them, the same code can be wrapped in a PAPPL printer application.
 
@@ -168,6 +199,10 @@ owners:
   GPL-2.0-or-later. https://www.cl.cam.ac.uk/~mgk25/jbigkit/
 - **foo2zjs** - Rick Richardson. Used only as the reference for the ZjStream
   JBIG parameters; no foo2zjs code is included.
+- **m1132-scan** - Filip Tarcala, MIT. Its `PROTOCOL.md` (the M1132 USB scan
+  protocol, worked out from HP's macOS driver) is the reference for
+  `scanner/m1132-escl.swift`; no m1132-scan code is included.
+  https://github.com/F1f0mp4/m1132-scan
 
 HP, LaserJet and HPLIP are trademarks of HP Development Company, L.P. This
 project is not affiliated with or endorsed by HP. HP's own macOS driver and

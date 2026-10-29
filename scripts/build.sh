@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Build a native arm64 hpcups CUPS filter for the HP LaserJet Pro M1132 MFP.
 # Inputs:  vendor/hplip-3.26.6.tar.gz, vendor/jbigkit-2.1.tar.gz, patches/, src/
-# Output:  build/out/hpcups, build/out/hp-laserjet_professional_m1132_mfp.ppd
+# Output:  build/out/hpcups, build/out/m1132-escl,
+#          build/out/hp-laserjet_professional_m1132_mfp.ppd
 # Needs:   Xcode CLT; MacPorts libjpeg (linked statically).
 set -euo pipefail
 
@@ -60,5 +61,8 @@ tar -xzOf "$ROOT/vendor/$HPLIP.tar.gz" "$HPLIP/ppd/hpcups/$PPD.gz" | gunzip > "$
 for p in "$ROOT"/patches/ppd/*.patch; do
     patch -s "$OUT/$PPD" < "$p"
 done
-file "$OUT/hpcups"
+# Scanner service (eSCL), Apple frameworks only.
+swiftc -O -framework IOUSBHost -o "$OUT/m1132-escl" "$ROOT/scanner/m1132-escl.swift"
+
+file "$OUT/hpcups" "$OUT/m1132-escl"
 otool -L "$OUT/hpcups"

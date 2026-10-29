@@ -26,13 +26,13 @@ fi
 OUT=$REL/HP-M1132-native-arm64-$VERSION.pkg
 echo "Version: $VERSION"
 
-for f in hpcups install.sh hp-laserjet_professional_m1132_mfp.ppd; do
+for f in hpcups m1132-escl install.sh hp-laserjet_professional_m1132_mfp.ppd; do
     [ -f "$REL/$f" ] || { echo "missing $REL/$f" >&2; exit 1; }
 done
 
 rm -rf "$WORK"
 mkdir -p "$WORK/root/$DEST" "$WORK/scripts" "$WORK/res"
-install -m 755 "$REL/hpcups" "$REL/install.sh" "$WORK/root/$DEST/"
+install -m 755 "$REL/hpcups" "$REL/m1132-escl" "$REL/install.sh" "$WORK/root/$DEST/"
 install -m 644 "$REL/hp-laserjet_professional_m1132_mfp.ppd" "$WORK/root/$DEST/"
 
 # Add the CUPS queue. Without a connected printer, keep the files and say how
@@ -56,10 +56,15 @@ cat > "$WORK/res/welcome.txt" <<WELCOME
 Native Apple Silicon driver for the HP LaserJet Professional M1132 MFP.
 Version $VERSION
 
-No Rosetta 2 and no HP plugin are needed. The installer adds the print
-filter to /$DEST and creates the printer queue
-"HP LaserJet M1132 (native arm64)" for the USB-connected printer.
-Existing printer queues are not changed.
+No Rosetta 2 and no HP plugin are needed. The installer adds:
+
+- the print filter and the printer queue
+  "HP LaserJet M1132 (native arm64)" for the USB-connected printer
+  (existing printer queues are not changed)
+- the scanner service, which makes the scanner available to NAPS2,
+  Image Capture and other eSCL (AirScan) apps on this Mac
+
+Files go to /$DEST.
 
 Connect the printer and turn it on before you continue.
 WELCOME
