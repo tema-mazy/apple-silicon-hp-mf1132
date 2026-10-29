@@ -8,6 +8,9 @@ Intel apps running on Rosetta will not open in macOS 28, and lists HP Utility,
 hpdot4d and ScanEventHandler among them. This project replaces the print path
 with a native build of HPLIP's open-source `hpcups` filter.
 
+Background article - the problem and how it was solved:
+[HP LaserJet Professional M1132 MFP on Apple Silicon](https://meow.kyiv.ua/hp-laserjet-professional-m1132-mfp-apple-silicon-macos-driver/diy/)
+
 ## Status
 
 | Feature                      | State                                        |
