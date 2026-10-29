@@ -19,6 +19,7 @@ Background article - the problem and how it was solved:
 | Printing (text, PDF, images) | Works, tested on the real printer            |
 | Manual double-sided printing | Works, tested on the real printer            |
 | Scanning (eSCL service)      | Works with NAPS2 (ESCL driver), tested       |
+| HP x86 driver removal        | `remove-hp-x86.sh`, with backup              |
 
 ## How it works
 
@@ -133,7 +134,29 @@ lp -d HP_M1132_native file.pdf
 3. Use 150, 300 or 600 dpi (other values are rounded to the nearest one).
 
 Quit Image Capture and HP's own scanner app first: while HP's Intel module
-holds the scanner, the service cannot open it.
+holds the scanner, the service cannot open it. Removing HP's old driver (next
+section) avoids that for good.
+
+## Removing HP's old x86 driver
+
+HP's driver stops working without Rosetta 2 anyway, and its scanner module can
+grab the scanner before the native service does. After installing the native
+driver, back it up and remove it:
+
+```
+DRY_RUN=1 release/remove-hp-x86.sh      # list what would be removed
+sudo release/remove-hp-x86.sh           # back up to ~ and remove
+```
+
+(The `.pkg` installs the same script as
+`/Library/Printers/apple-silicon-hp-m1132/remove-hp-x86.sh`.)
+
+It removes `/Library/Printers/hp` (HP Utility, hpdot4d, ScanEventHandler, HP
+Device Monitor Manager, the x86 filters), HP's Intel-only Image Capture
+modules, every PPD that points into `/Library/Printers/hp`, and the print
+queues that use them. The native queue is not touched. Everything removed is
+first saved to `~/hp-x86-driver-<date>.tar.gz`; restore it with
+`sudo tar -xzf ~/hp-x86-driver-<date>.tar.gz -C /`.
 
 ## Double-sided printing
 
@@ -159,6 +182,7 @@ the page count is odd). The PPD turns this on with `*hpManualDuplex: "1"`.
 | `scripts/install-queue.sh`   | Installs `build/out` via `release/install.sh`     |
 | `scripts/make-pkg.sh`        | Builds the Installer package from `release/`      |
 | `release/`                   | Prebuilt `hpcups`, `m1132-escl`, PPD, `install.sh`|
+| `release/remove-hp-x86.sh`   | Backs up and removes HP's x86 driver              |
 
 HPLIP patches:
 

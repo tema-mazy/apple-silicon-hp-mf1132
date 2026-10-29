@@ -26,13 +26,13 @@ fi
 OUT=$REL/HP-M1132-native-arm64-$VERSION.pkg
 echo "Version: $VERSION"
 
-for f in hpcups m1132-escl install.sh hp-laserjet_professional_m1132_mfp.ppd; do
+for f in hpcups m1132-escl install.sh remove-hp-x86.sh hp-laserjet_professional_m1132_mfp.ppd; do
     [ -f "$REL/$f" ] || { echo "missing $REL/$f" >&2; exit 1; }
 done
 
 rm -rf "$WORK"
 mkdir -p "$WORK/root/$DEST" "$WORK/scripts" "$WORK/res"
-install -m 755 "$REL/hpcups" "$REL/m1132-escl" "$REL/install.sh" "$WORK/root/$DEST/"
+install -m 755 "$REL/hpcups" "$REL/m1132-escl" "$REL/install.sh" "$REL/remove-hp-x86.sh" "$WORK/root/$DEST/"
 install -m 644 "$REL/hp-laserjet_professional_m1132_mfp.ppd" "$WORK/root/$DEST/"
 
 # Add the CUPS queue. Without a connected printer, keep the files and say how
