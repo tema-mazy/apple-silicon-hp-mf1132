@@ -1,0 +1,11 @@
+--- a/prnt/hpcups/genJPEGStrips.cpp
++++ b/prnt/hpcups/genJPEGStrips.cpp
+@@ -28,7 +28,7 @@
+ 
+ #include <setjmp.h>
+ 
+-#include <malloc.h>
++#include <stdlib.h>
+ #include <memory.h>
+ 
+ 

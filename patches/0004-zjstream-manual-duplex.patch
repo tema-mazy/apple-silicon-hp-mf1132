@@ -1,0 +1,275 @@
+--- a/prnt/hpcups/CommonDefinitions.h
++++ b/prnt/hpcups/CommonDefinitions.h
+@@ -464,6 +464,7 @@
+     int                integer_values[16];
+     int                printer_platform_version;
+     int                pre_process_raster;
++    DUPLEXMODE         manual_duplex;
+     int                HPSPDClass;
+     int 	           args_duplex_mode;
+ } JobAttributes;
+--- a/prnt/hpcups/HPCupsFilter.cpp
++++ b/prnt/hpcups/HPCupsFilter.cpp
+@@ -416,6 +416,14 @@
+          (attr->value != NULL)) 
+     {
+           m_JA.pre_process_raster = atoi(attr->value);
++    }
++
++//Manual duplex: the encapsulator reorders pages and pauses, the printer gets a simplex job
++    if (cups_header->Duplex && ((attr = ppdFindAttr(m_ppd, "hpManualDuplex", NULL)) != NULL) &&
++         (attr->value != NULL) && atoi(attr->value) == 1)
++    {
++          m_JA.manual_duplex = m_JA.e_duplex_mode;
++          m_JA.e_duplex_mode = DUPLEXMODE_NONE;
+     }
+ 
+     if (((attr = ppdFindAttr(m_ppd, "HPSPDClass", NULL)) == NULL) ||
+@@ -727,7 +735,7 @@
+                 return JOB_CANCELED;
+             }
+ 
+-            if (m_JA.pre_process_raster) {
++            if (m_JA.pre_process_raster || m_JA.manual_duplex) {
+ 		    	// CC ToDo: Why pSwapedPagesFileName should be sent as a parameter? 
+                   	// Remove if not required to send it as parameter
+                 err = m_Job.preProcessRasterData(&cups_raster, &cups_header, hpPreProcessedRasterFile);
+--- a/prnt/hpcups/LJZjStream.h
++++ b/prnt/hpcups/LJZjStream.h
+@@ -59,6 +59,7 @@
+     DRIVER_ERROR    encapsulateColor2(RASTERDATA *input);
+     DRIVER_ERROR    EndPage ();
+     DRIVER_ERROR    sendBlankBands();
++    DRIVER_ERROR    preProcessManualDuplex(cups_raster_t **ppcups_raster, cups_page_header2_t* firstpage_cups_header, char* pSwapedPagesFileName);
+     PrintMode    m_PM;
+     ModeJbig     *m_pModeJbig;
+     bool         m_bNotSent;
+@@ -66,6 +67,8 @@
+     int          m_iPlaneNumber;
+     int          m_iBpp;
+     int          m_iPlanes;
++    int          m_iPageNum;
++    int          m_iManualDuplexPause;  // pages before the manual duplex pause, 0 = none
+ }; // LJZjStream
+ 
+ #endif // LJZJSTREAM_H
+--- a/prnt/hpcups/LJZjStream.cpp
++++ b/prnt/hpcups/LJZjStream.cpp
+@@ -43,6 +43,7 @@
+ #include "Utils.h"
+ #include "hpjbig_wrapper.h"
+ #include "utils.h"
++#include <vector>
+ 
+ #define ZJC_BAND_HEIGHT    100
+ 
+@@ -52,6 +53,8 @@
+     strcpy(m_szLanguage, "ZJS");
+     m_pModeJbig = NULL;
+     m_bNotSent = true;
++    m_iPageNum = 0;
++    m_iManualDuplexPause = 0;
+ }
+ 
+ LJZjStream::~LJZjStream()
+@@ -218,6 +221,17 @@
+ 
+     m_iPlaneNumber = 0;
+     m_iCurRaster   = 0;
++    m_iPageNum++;
++
++    // Manual duplex: stop before the first back side so the user can reload the stack
++    bool bFirstBackSide = m_iManualDuplexPause && m_iPageNum == m_iManualDuplexPause + 1;
++    if (bFirstBackSide)
++    {
++        i = SendChunkHeader (szStr, 16, ZJT_PAUSE, 0);
++        err = sendBuffer ((const BYTE *) szStr, i);
++        ERRCHECK;
++    }
++
+     if((strcmp(m_pJA->printer_platform, "ljzjscolor") == 0) && (m_pJA->printer_platform_version == 2))
+     {
+        return StartPage_ljzjcolor2(pJA);
+@@ -261,7 +275,8 @@
+ 		}
+ 	}
+ 
+-    i += SendItem (szStr+i, ZJIT_UINT32, ZJI_DMMEDIATYPE, m_pQA->media_type);	
++    // 0x103 (letterhead) on the first back side, as foo2zjs does for manual duplex
++    i += SendItem (szStr+i, ZJIT_UINT32, ZJI_DMMEDIATYPE, bFirstBackSide ? 0x103 : m_pQA->media_type);
+     i += SendItem (szStr+i, ZJIT_UINT32, ZJI_DMPAPER, m_pMA->pcl_id);	
+ 	i += SendItem (szStr+i, ZJIT_UINT32, ZJI_DMDEFAULTSOURCE, m_pJA->media_source);
+     i += SendItem (szStr+i, ZJIT_UINT32, ZJI_NBIE, m_iPlanes);
+@@ -681,7 +696,11 @@
+ 	snprintf(hpEvenPagesFile, sizeof(hpEvenPagesFile), "%s/hp_%s_cups_EvenPagesXXXXXX",CUPS_TMP_DIR, m_pJA->user_name);
+ 	snprintf(hpOddPagesFile, sizeof(hpOddPagesFile), "%s/hp_%s_cups_OddPagesXXXXXX", CUPS_TMP_DIR, m_pJA->user_name);
+ 	
+-	if (1 != m_pJA->pre_process_raster || !firstpage_cups_header->Duplex){		                                  
++	if (m_pJA->manual_duplex != DUPLEXMODE_NONE) {
++		return preProcessManualDuplex(ppcups_raster, firstpage_cups_header, pSwapedPagesFileName);
++	}
++
++	if (1 != m_pJA->pre_process_raster || !firstpage_cups_header->Duplex){
+ 		return  NO_ERROR;                                  
+     }    
+ 
+@@ -841,4 +860,159 @@
+         unlink(hpOddPagesFile); 
+         return driver_error;
+ }
++
++
++static DRIVER_ERROR writeManualDuplexPage(cups_raster_t *out_raster, int fdPages, cups_page_header2_t *header,
++                                          off_t offset, bool rotate, bool blank)
++{
++    unsigned int        bpl = header->cupsBytesPerLine;
++    unsigned int        bits = header->cupsBitsPerPixel;
++    unsigned int        unit = bits / 8;
++    std::vector<BYTE>   line(bpl);
++    std::vector<BYTE>   flip(bpl);
++
++    cupsRasterWriteHeader2(out_raster, header);
++    for (unsigned int y = 0; y < header->cupsHeight; y++)
++    {
++        if (blank)
++        {
++            memset(&line[0], (header->cupsColorSpace == CUPS_CSPACE_K) ? 0x00 : 0xFF, bpl);
++        }
++        else
++        {
++            unsigned int row = rotate ? header->cupsHeight - 1 - y : y;
++            if (pread(fdPages, &line[0], bpl, offset + (off_t) row * bpl) != (ssize_t) bpl)
++            {
++                return SYSTEM_ERROR;
++            }
++            if (rotate && bits % 8)
++            {
++                // Sub-byte pixels (1, 2 or 4 bits): mirror pixel by pixel
++                unsigned int w = header->cupsWidth, mask = (1 << bits) - 1;
++                memset(&flip[0], 0, bpl);
++                for (unsigned int x = 0; x < w; x++)
++                {
++                    unsigned int s = x * bits, d = (w - 1 - x) * bits;
++                    unsigned int v = (line[s >> 3] >> (8 - bits - (s & 7))) & mask;
++                    flip[d >> 3] |= v << (8 - bits - (d & 7));
++                }
++                line.swap(flip);
++            }
++            else if (rotate)
++            {
++                for (unsigned int a = 0, b = bpl - unit; a < b; a += unit, b -= unit)
++                {
++                    for (unsigned int k = 0; k < unit; k++)
++                    {
++                        BYTE t = line[a + k];
++                        line[a + k] = line[b + k];
++                        line[b + k] = t;
++                    }
++                }
++            }
++        }
++        cupsRasterWritePixels(out_raster, &line[0], bpl);
++    }
++    return NO_ERROR;
++}
++
++/*
++ * Manual duplex for printers without a duplex unit, same page order as foo2zjs:
++ * front sides in order, then (after the ZJT_PAUSE sent by StartPage) the back
++ * sides in reverse order, rotated 180 degrees for long edge binding. An odd
++ * page count gets a blank back side for the last sheet.
++ */
++DRIVER_ERROR LJZjStream::preProcessManualDuplex(cups_raster_t **ppcups_raster, cups_page_header2_t* firstpage_cups_header, char* pSwapedPagesFileName)
++{
++    DRIVER_ERROR                        err = NO_ERROR;
++    std::vector<cups_page_header2_t>    headers;
++    std::vector<off_t>                  offsets;
++    std::vector<BYTE>                   line;
++    cups_page_header2_t                 cups_header;
++    cups_raster_t                       *out_raster = NULL;
++    bool                                rotate = (m_pJA->manual_duplex == DUPLEXMODE_BOOK);
++    char                                szPagesFile[MAX_FILE_PATH_LEN];
++    off_t                               pos = 0;
++    int                                 fdPages, fdOut, n, p;
+ 
++    snprintf(szPagesFile, sizeof(szPagesFile), "%s/hp_%s_cups_PagesXXXXXX", CUPS_TMP_DIR, m_pJA->user_name);
++    fdPages = mkstemp(szPagesFile);
++    fdOut = mkstemp(pSwapedPagesFileName);
++    unlink(szPagesFile);
++    if (fdPages < 0 || fdOut < 0)
++    {
++        dbglog("ERROR: Unable to open temp files for manual duplex\n");
++        err = SYSTEM_ERROR;
++        goto bugout;
++    }
++
++    // Spool every page, remembering where each one starts
++    memcpy(&cups_header, firstpage_cups_header, sizeof(cups_page_header2_t));
++    do
++    {
++        headers.push_back(cups_header);
++        offsets.push_back(pos);
++        line.resize(cups_header.cupsBytesPerLine);
++        for (unsigned int y = 0; y < cups_header.cupsHeight; y++)
++        {
++            cupsRasterReadPixels(*ppcups_raster, &line[0], cups_header.cupsBytesPerLine);
++            if (write(fdPages, &line[0], cups_header.cupsBytesPerLine) != (ssize_t) cups_header.cupsBytesPerLine)
++            {
++                err = SYSTEM_ERROR;
++                goto bugout;
++            }
++            pos += cups_header.cupsBytesPerLine;
++        }
++    } while (cupsRasterReadHeader2(*ppcups_raster, &cups_header));
++
++    n = (int) headers.size();
++    out_raster = cupsRasterOpen(fdOut, CUPS_RASTER_WRITE);
++    if (out_raster == NULL)
++    {
++        err = NULL_POINTER;
++        goto bugout;
++    }
++
++    for (p = 0; p < n && err == NO_ERROR; p += 2)
++    {
++        err = writeManualDuplexPage(out_raster, fdPages, &headers[p], offsets[p], false, false);
++    }
++    if (n > 1)
++    {
++        if (n % 2 && err == NO_ERROR)
++        {
++            err = writeManualDuplexPage(out_raster, fdPages, &headers[n - 1], 0, false, true);
++        }
++        for (p = (n % 2) ? n - 2 : n - 1; p >= 1 && err == NO_ERROR; p -= 2)
++        {
++            err = writeManualDuplexPage(out_raster, fdPages, &headers[p], offsets[p], rotate, false);
++        }
++        m_iManualDuplexPause = (n + 1) / 2;
++    }
++    cupsRasterClose(out_raster);
++    close(fdOut);
++    close(fdPages);
++    if (err != NO_ERROR)
++    {
++        return err;
++    }
++    dbglog("DEBUG: manual duplex: %d pages, pause after %d\n", n, m_iManualDuplexPause);
++
++    if ((fdOut = open(pSwapedPagesFileName, O_RDONLY)) == -1)
++    {
++        return SYSTEM_ERROR;
++    }
++    *ppcups_raster = cupsRasterOpen(fdOut, CUPS_RASTER_READ);
++    if (*ppcups_raster == NULL || !cupsRasterReadHeader2(*ppcups_raster, firstpage_cups_header))
++    {
++        return SYSTEM_ERROR;
++    }
++    return NO_ERROR;
++
++bugout:
++    if (fdPages >= 0)
++        close(fdPages);
++    if (fdOut >= 0)
++        close(fdOut);
++    return err;
++}

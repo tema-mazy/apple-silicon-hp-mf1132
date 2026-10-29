@@ -1,0 +1,17 @@
+--- a/ppd/hpcups/hp-laserjet_professional_m1132_mfp.ppd
++++ b/ppd/hpcups/hp-laserjet_professional_m1132_mfp.ppd
+@@ -123,6 +123,14 @@
+ *ParamCustomPageSize WidthOffset: 3 points 0 0
+ *ParamCustomPageSize HeightOffset: 4 points 0 0
+ *ParamCustomPageSize Orientation: 5 int 0 0
++*hpManualDuplex: "1"
++*OpenUI *Duplex/Double-Sided Printing: PickOne
++*OrderDependency: 10 AnySetup *Duplex
++*DefaultDuplex: None
++*Duplex DuplexNoTumble/Long Edge (Standard): "<</Duplex true/Tumble false>>setpagedevice"
++*Duplex DuplexTumble/Short Edge (Flip): "<</Duplex true/Tumble true>>setpagedevice"
++*Duplex None/Off: "<</Duplex false/Tumble false>>setpagedevice"
++*CloseUI: *Duplex
+ *OpenUI *InputSlot/Media Source: PickOne
+ *OrderDependency: 10 AnySetup *InputSlot
+ *DefaultInputSlot: Auto

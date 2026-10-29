@@ -1,0 +1,6 @@
+vendor/
+backup/
+build/
+handoff.md
+release/*.pkg
+docs/

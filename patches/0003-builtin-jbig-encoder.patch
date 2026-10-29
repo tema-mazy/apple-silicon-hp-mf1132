@@ -1,0 +1,31 @@
+--- a/prnt/hpcups/ModeJbig.cpp
++++ b/prnt/hpcups/ModeJbig.cpp
+@@ -44,6 +44,10 @@
+ int (*HPLJJBGCompress) (int iWidth, int iHeight, unsigned char **pBuff,
+                         HPLJZjcBuff *pOutBuff, HPLJZjsJbgEncSt *pJbgEncSt);
+ int (*HPLJSoInit) (int iFlag);
++#ifdef HPCUPS_BUILTIN_JBIG
++int hp_encode_bits_to_jbig(int iWidth, int iHeight, unsigned char **pBuff,
++                           HPLJZjcBuff *pOutBuff, HPLJZjsJbgEncSt *pJbgEncSt);
++#endif
+ }
+ 
+ const BYTE ModeJbig::szByte1[256] =
+@@ -132,6 +136,9 @@
+     m_iBPP         = iBPP;
+     m_ezj_platform = zj_platform;
+ 
++#ifdef HPCUPS_BUILTIN_JBIG
++    HPLJJBGCompress = hp_encode_bits_to_jbig;
++#else
+     m_hHPLibHandle = load_plugin_library(UTILS_PRINT_PLUGIN_LIBRARY, PRNT_PLUGIN_LJ);
+     if (m_hHPLibHandle)
+     {
+@@ -147,6 +154,7 @@
+     {
+         return PLUGIN_LIBRARY_MISSING;
+     }
++#endif
+ 
+     if (iPlanes == 4)
+     {
