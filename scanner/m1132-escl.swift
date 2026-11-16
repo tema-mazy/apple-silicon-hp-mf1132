@@ -241,7 +241,9 @@ func scan(_ p: ScanParams, cancel: CancelToken) throws -> RawImage {
                 width = stride
             }
             carry.append(body.dropFirst(24))
-            // Colour rows arrive as R, G, B lines of `stride` bytes; grey as one line.
+            // Colour rows arrive as three lines of `stride` bytes in the order
+            // B, R, G (not R, G, B: that shows up as a 120 degree hue shift);
+            // grey as one line.
             let rowBytes = stride * channels
             let whole = carry.count / rowBytes
             var out = [UInt8](repeating: 0, count: whole * width * channels)
@@ -249,7 +251,10 @@ func scan(_ p: ScanParams, cancel: CancelToken) throws -> RawImage {
                 for y in 0..<whole {
                     let base = y * rowBytes, dst = y * width * channels
                     for x in 0..<width {
-                        for c in 0..<channels { out[dst + x * channels + c] = src[base + c * stride + x] }
+                        for c in 0..<channels {
+                            let line = channels == 3 ? (c + 1) % 3 : 0   // R<-line 1, G<-line 2, B<-line 0
+                            out[dst + x * channels + c] = src[base + line * stride + x]
+                        }
                     }
                 }
             }

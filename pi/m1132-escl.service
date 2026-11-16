@@ -1,0 +1,14 @@
+[Unit]
+Description=eSCL (AirScan) service for HP LaserJet M1132 MFP
+After=network-online.target avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/m1132-escl --port 18132
+User=m1132-escl
+SupplementaryGroups=scanner
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

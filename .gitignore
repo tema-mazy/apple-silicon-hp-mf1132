@@ -5,3 +5,5 @@ handoff.md
 release/*.pkg
 docs/
 .DS_Store
+pi/out/
+pi/escl/m1132-escl
