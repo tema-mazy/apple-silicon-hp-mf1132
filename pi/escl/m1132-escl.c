@@ -389,7 +389,9 @@ static int scan_run(const struct scan_params *p, volatile int *cancel, struct ra
             }
             if (stride <= 0) { fail(&s, "bad row stride"); goto out; }
             if (buf_append(&carry, body.p + 24, len - 24) < 0) { fail(&s, "out of memory"); goto out; }
-            /* Colour rows arrive as R, G, B lines of `stride` bytes; grey as one line. */
+            /* Colour rows arrive as three lines of `stride` bytes in the order
+             * B, R, G (not R, G, B: that shows up as a 120 degree hue shift);
+             * grey as one line. */
             size_t row_bytes = (size_t)stride * channels;
             size_t whole = carry.len / row_bytes;
             if (buf_reserve(&pixels, whole * width * channels) < 0) { fail(&s, "out of memory"); goto out; }
@@ -400,9 +402,9 @@ static int scan_run(const struct scan_params *p, volatile int *cancel, struct ra
                     memcpy(dst, src, width);
                 } else {
                     for (int x = 0; x < width; x++) {
-                        dst[x * 3] = src[x];
-                        dst[x * 3 + 1] = src[stride + x];
-                        dst[x * 3 + 2] = src[2 * stride + x];
+                        dst[x * 3] = src[stride + x];           /* R */
+                        dst[x * 3 + 1] = src[2 * stride + x];   /* G */
+                        dst[x * 3 + 2] = src[x];                /* B */
                     }
                 }
                 pixels.len += (size_t)width * channels;
