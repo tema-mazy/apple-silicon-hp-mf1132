@@ -1,0 +1,34 @@
+# Lima VM for building the Raspberry Pi (aarch64 Debian 12) binaries on an
+# Apple Silicon Mac. Same architecture and glibc as 64-bit Raspberry Pi OS
+# bookworm, so the output runs on the Pi unchanged.
+#
+#   limactl create --name m1132 pi/lima.yaml && limactl start m1132
+#   limactl shell m1132 -- /Users/mazy/Dev/apple-silicon-hp-mf1132/pi/build.sh
+minimumLimaVersion: 2.0.0
+
+base:
+- template:_images/debian-12
+
+arch: aarch64
+vmType: vz
+cpus: 4
+memory: 4GiB
+disk: 20GiB
+
+mounts:
+- location: "~/Dev/apple-silicon-hp-mf1132"
+  writable: true
+- location: "/tmp/lima"
+  writable: true
+
+provision:
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+      build-essential g++ make patch pkg-config file \
+      libcups2-dev libcupsimage2-dev libjpeg62-turbo-dev zlib1g-dev \
+      libusb-1.0-0-dev libmicrohttpd-dev libpng-dev

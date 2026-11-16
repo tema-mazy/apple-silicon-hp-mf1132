@@ -5,3 +5,4 @@ handoff.md
 release/*.pkg
 docs/
 .DS_Store
+pi/out/

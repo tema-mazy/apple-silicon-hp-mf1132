@@ -1,0 +1,3 @@
+# HP LaserJet M1132 MFP: let the m1132-escl service (group scanner) open the
+# USB device. The CUPS usb backend runs as root and is not affected.
+SUBSYSTEM=="usb", ATTR{idVendor}=="03f0", ATTR{idProduct}=="042a", MODE="0660", GROUP="scanner"

@@ -1,0 +1,23 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copy pi/out and the service files to the Pi and run install.sh there.
+#
+#   pi/deploy.sh            (PI=user@host overrides the target)
+#
+# Uses tar over ssh, so the Pi needs nothing but sshd. The ssh key may prompt
+# for biometrics twice (copy, then install).
+set -euo pipefail
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+PI=${PI:-pi@m1132.local}
+
+for f in out/hpcups out/m1132-escl out/hp-laserjet_professional_m1132_mfp.ppd; do
+    [ -f "$HERE/$f" ] || { echo "missing $HERE/$f - run pi/build.sh in the Lima VM first" >&2; exit 1; }
+done
+
+echo "Copying to $PI:~/m1132"
+tar -C "$HERE" -cf - out install.sh m1132-escl.service 60-m1132-scanner.rules m1132-escl.avahi.service \
+    | ssh "$PI" 'rm -rf ~/m1132 && mkdir ~/m1132 && tar -C ~/m1132 -xf -'
+
+echo "Installing on $PI"
+ssh -t "$PI" "sudo QUEUE=${QUEUE:-HP_M1132} URI=${URI:-} ~/m1132/install.sh ~/m1132"

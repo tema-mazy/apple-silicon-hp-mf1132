@@ -20,6 +20,7 @@ Background article - the problem and how it was solved:
 | Manual double-sided printing | Works, tested on the real printer            |
 | Scanning (eSCL service)      | Works with NAPS2 (ESCL driver), tested       |
 | HP x86 driver removal        | `remove-hp-x86.sh`, with backup              |
+| Raspberry Pi print/scan server | AirPrint + AirScan from a Pi Zero 2 W, see `pi/README.md` |
 
 ## How it works
 
@@ -54,6 +55,19 @@ NAPS2 / eSCL app -> http://127.0.0.1:18132/eSCL -> m1132-escl -> USB (IOUSBHost)
   affected.
 - Colour, greyscale and black & white at 150, 300 and 600 dpi; JPEG, PDF or
   PNG; any area of the glass (8.50 x 11.22 in).
+
+Raspberry Pi (optional): the same `hpcups` build and a C port of the scanner
+service run on a Pi Zero 2 W with the printer on its USB port. CUPS shares the
+queue on the LAN, so Macs and iPhones print driverless (AirPrint / IPP
+Everywhere) and scan via eSCL (AirScan), with no driver on the client at all:
+
+```
+Mac / iPhone -> IPP (AirPrint) -> Pi: CUPS (gstoraster) -> hpcups -> ZjStream -> usb backend
+Image Capture / NAPS2 -> eSCL -> Pi: m1132-escl (libusb) -> USB scanner
+```
+
+Everything for the Pi lives in `pi/`; see `pi/README.md`. `release/` stays
+macOS-only.
 
 ## Requirements
 
@@ -183,6 +197,7 @@ the page count is odd). The PPD turns this on with `*hpManualDuplex: "1"`.
 | `scripts/make-pkg.sh`        | Builds the Installer package from `release/`      |
 | `release/`                   | Prebuilt `hpcups`, `m1132-escl`, PPD, `install.sh`|
 | `release/remove-hp-x86.sh`   | Backs up and removes HP's x86 driver              |
+| `pi/`                        | Raspberry Pi port: Linux build, C scanner service, install |
 
 HPLIP patches:
 
