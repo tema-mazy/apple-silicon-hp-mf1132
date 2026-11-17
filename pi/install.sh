@@ -54,11 +54,16 @@ echo "Scanner: eSCL service on http://$(hostname).local:18132 (journalctl -u $SV
 # CUPS: share queues on the LAN; cups-browsed is not needed for that.
 systemctl enable --now cups
 cupsctl --share-printers
+# cupsctl restarts cupsd; wait until the scheduler answers again.
+for _ in $(seq 1 30); do
+    lpstat -r 2>/dev/null | grep -q 'is running' && break
+    sleep 1
+done
 
 if [ -z "${URI:-}" ]; then
     # The libusb backend probes on demand; the device may need a moment.
     for _ in 1 2 3 4 5 6; do
-        URI=$(lpinfo -v | awk 'tolower($0) ~ /^direct usb:.*m1132/ {print $2; exit}')
+        URI=$(lpinfo -v 2>/dev/null | awk 'tolower($0) ~ /^direct usb:.*m1132/ {print $2; exit}' || true)
         [ -n "$URI" ] && break
         sleep 5
     done

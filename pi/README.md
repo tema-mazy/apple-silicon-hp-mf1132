@@ -19,8 +19,12 @@ Image Capture / NAPS2 -> eSCL -> Pi: m1132-escl (libusb) -> USB scanner
 ## Requirements
 
 - Raspberry Pi Zero 2 W (any 64-bit Pi works) running 64-bit Raspberry Pi OS
-  Lite, bookworm (Debian 12). Hostname `m1132` is assumed below.
-- Micro-USB OTG adapter for the printer; power via the PWR port.
+  Lite, bookworm (Debian 12) or trixie (Debian 13, tested with the 2026-10-06
+  image). Binaries built on Debian 12 run on both. The hostname is whatever
+  Raspberry Pi Imager set; `deploy.sh` takes it via `PI=pi@<host>.local`.
+- Micro-USB OTG adapter for the printer; power via the PWR port. A USB hub
+  on the OTG port with the printer plus a USB ethernet adapter works too and
+  is the better choice where Wi-Fi is weak (see Networking).
 - On the Mac: Lima (`port install lima`) to build the aarch64 binaries. The
   Lima VM is arm64 Debian 12, so the output runs on the Pi unchanged.
 
@@ -93,6 +97,32 @@ iPhone: Share > Print.
 - Runs as user `m1132-escl` with USB access through the `scanner` group.
 - libjpeg is linked dynamically (same Debian on both sides).
 - The PDF output is a hand-written single-page PDF wrapping the JPEG.
+
+## Networking on the Zero 2 W
+
+- The radio is 2.4 GHz only and the PCB antenna is weak: an AP the Mac sees
+  at full strength can be -90 dBm at the Pi. Below about -80 dBm association
+  times out (`wpa_supplicant` logs `reason=3 locally_generated=1`) and the
+  router never sees the client. Move the Pi or use ethernet.
+- Imager writes `cfg80211.ieee80211_regdom=US` into cmdline.txt. US hides
+  channels 12 and 13; set your country (`raspi-config nonint do_wifi_country
+  PL`, and fix cmdline.txt) or the SSID is invisible.
+- Imager's cloud-init profile may store no Wi-Fi key ("secrets are
+  required"); set it with `nmcli con modify <profile> wifi-sec.psk '<key>'`.
+- NetworkManager leaves USB gadget interfaces (`usb0`) unmanaged; a
+  `/etc/NetworkManager/conf.d/usb0.conf` with `[device-usb0]
+  match-device=interface-name:usb0 managed=1` fixes that if you want an
+  ethernet-over-USB link to a Mac for setup (`dtoverlay=dwc2` plus
+  `modules-load=dwc2,g_cdc`; macOS then also needs a route for the Pi's
+  address on the gadget interface).
+- Serial console on GPIO 14/15 needs `enable_uart=1`. With Bluetooth on, the
+  pins carry the mini UART whose baud follows the core clock (readable at
+  230400 early in boot, garbage later); add `dtoverlay=disable-bt` to get the
+  PL011 at a stable 115200. The last `console=` entry in cmdline.txt owns the
+  login prompt, so keep `console=serial0,115200` last.
+- Never put a blocking `systemctl start` in cloud-init `bootcmd`; it runs
+  before basic.target and deadlocks the boot. `cloud-init=disabled` on the
+  kernel command line gets you past such a hang.
 
 ## Troubleshooting
 
