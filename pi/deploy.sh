@@ -16,7 +16,7 @@ for f in out/hpcups out/m1132-escl out/hp-laserjet_professional_m1132_mfp.ppd; d
 done
 
 echo "Copying to $PI:~/m1132"
-tar -C "$HERE" -cf - out install.sh m1132-escl.service 60-m1132-scanner.rules m1132-escl.avahi.service \
+tar -C "$HERE" -cf - out install.sh m1132-escl.service 60-m1132-scanner.rules m1132-escl.avahi.service rpi-brcmfmac.conf \
     | ssh "$PI" 'rm -rf ~/m1132 && mkdir ~/m1132 && tar -C ~/m1132 -xf -'
 
 echo "Installing on $PI"

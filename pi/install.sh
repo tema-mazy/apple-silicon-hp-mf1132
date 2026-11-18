@@ -19,7 +19,7 @@ SVC=m1132-escl
 
 [ "$(id -u)" -eq 0 ] || { echo "run with sudo" >&2; exit 1; }
 [ "$(uname -m)" = aarch64 ] || { echo "this build is for 64-bit Raspberry Pi OS (aarch64) only" >&2; exit 1; }
-for f in out/hpcups out/$SVC "out/$PPD_NAME" $SVC.service 60-m1132-scanner.rules $SVC.avahi.service; do
+for f in out/hpcups out/$SVC "out/$PPD_NAME" $SVC.service 60-m1132-scanner.rules $SVC.avahi.service rpi-brcmfmac.conf; do
     [ -f "$SRC/$f" ] || { echo "missing $SRC/$f" >&2; exit 1; }
 done
 
@@ -50,6 +50,16 @@ systemctl daemon-reload
 systemctl enable --now avahi-daemon $SVC
 systemctl restart $SVC
 echo "Scanner: eSCL service on http://$(hostname).local:18132 (journalctl -u $SVC)"
+
+# Zero 2 W Wi-Fi: mask the broken SAE/FWSUP firmware features (see the conf
+# file and README "Networking"). Takes effect on the next boot; the driver
+# also lives in the initramfs, so rebuild that too.
+if grep -q "Zero 2 W" /proc/device-tree/model 2>/dev/null \
+   && ! cmp -s "$SRC/rpi-brcmfmac.conf" /etc/modprobe.d/rpi-brcmfmac.conf; then
+    install -o root -g root -m 644 "$SRC/rpi-brcmfmac.conf" /etc/modprobe.d/rpi-brcmfmac.conf
+    update-initramfs -u
+    echo "brcmfmac feature mask installed; reboot for Wi-Fi to use it"
+fi
 
 # CUPS: share queues on the LAN; cups-browsed is not needed for that.
 systemctl enable --now cups

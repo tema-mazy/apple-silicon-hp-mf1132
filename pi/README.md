@@ -100,10 +100,20 @@ iPhone: Share > Print.
 
 ## Networking on the Zero 2 W
 
-- The radio is 2.4 GHz only and the PCB antenna is weak: an AP the Mac sees
-  at full strength can be -90 dBm at the Pi. Below about -80 dBm association
-  times out (`wpa_supplicant` logs `reason=3 locally_generated=1`) and the
-  router never sees the client. Move the Pi or use ethernet.
+- The radio is 2.4 GHz only and the PCB antenna is weak, but the usual
+  failure is not signal: against a WPA2/WPA3 mixed-mode AP every join ends
+  in `Authentication with <bssid> timed out` and the AP never logs the
+  client, even at -60 dBm. The firmware advertises WPA3 SAE and a
+  firmware-side 4-way handshake, NetworkManager therefore selects SAE, and
+  the BCM43430 completes neither. Raspberry Pi OS already
+  masks some of this in `/usr/lib/modprobe.d/rpi-brcmfmac.conf`
+  (`feature_disable=0x282000`) but leaves SAE_EXT on. `install.sh` installs
+  `rpi-brcmfmac.conf` into `/etc/modprobe.d/`, which overrides the system
+  file by name and adds bit 25 (`feature_disable=0x02282000`), then rebuilds
+  the initramfs; after a reboot the Pi joins as plain WPA2-PSK. To confirm, run
+  `wpa_cli -i wlan0 log_level DEBUG` and look for `using KEY_MGMT WPA-PSK`
+  instead of `SAE`; `cat /sys/kernel/debug/ieee80211/phy0/features` must
+  not list `SAE_EXT`.
 - Imager writes `cfg80211.ieee80211_regdom=US` into cmdline.txt. US hides
   channels 12 and 13; set your country (`raspi-config nonint do_wifi_country
   PL`, and fix cmdline.txt) or the SSID is invisible.
