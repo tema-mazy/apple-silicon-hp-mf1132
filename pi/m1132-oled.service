@@ -7,8 +7,10 @@ ConditionPathExists=/dev/i2c-1
 ExecStart=/usr/local/bin/m1132-oled
 Restart=always
 RestartSec=10
-DynamicUser=yes
-SupplementaryGroups=i2c
+# A real user, not DynamicUser: the system D-Bus refuses dynamic users and
+# nmcli then fails, which blanks the Wi-Fi and hotspot lines.
+User=m1132-oled
+Group=i2c
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes

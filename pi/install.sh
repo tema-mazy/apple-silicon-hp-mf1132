@@ -58,6 +58,7 @@ echo "Scanner: eSCL service on http://$(hostname).local:18132 (journalctl -u $SV
 grep -q '^dtparam=i2c_arm=on' /boot/firmware/config.txt || echo 'dtparam=i2c_arm=on' >> /boot/firmware/config.txt
 grep -qx 'i2c-dev' /etc/modules || echo 'i2c-dev' >> /etc/modules
 [ -e /dev/i2c-1 ] || { dtparam i2c_arm=on 2>/dev/null; modprobe i2c-dev; } || true
+id -u m1132-oled >/dev/null 2>&1 || useradd -r -M -s /usr/sbin/nologin -g i2c m1132-oled
 install -o root -g root -m 755 "$SRC/m1132-oled.py" /usr/local/bin/m1132-oled
 install -o root -g root -m 644 "$SRC/m1132-oled.service" /etc/systemd/system/m1132-oled.service
 systemctl daemon-reload
