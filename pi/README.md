@@ -98,12 +98,52 @@ iPhone: Share > Print.
 - libjpeg is linked dynamically (same Debian on both sides).
 - The PDF output is a hand-written single-page PDF wrapping the JPEG.
 
+## OLED status display
+
+Optional: a 128x64 SSD1306 OLED on I2C (the common 0.96 inch GM009605
+module) shows host name, time, temperature, IP and Wi-Fi signal, printer
+state (idle / printing N / stopped / no USB) and the scanner service.
+`install.sh` enables I2C, installs `m1132-oled` and its service; the
+service retries every 30 s until a display answers, so it can be wired
+later. Wiring to the 40-pin header (follow the labels on the module, the
+pin order differs between boards):
+
+```
+VCC -> pin 1 (3.3V)    GND -> pin 6    SCL -> pin 5 (GPIO3)    SDA -> pin 3 (GPIO2)
+```
+
+`i2cdetect -y 1` must show `3c`; for a `3d` module add
+`Environment=I2C_ADDR=0x3d` to the service. Burn-in care is built in: low
+contrast (`OLED_CONTRAST`, default 0x40), a slow pixel shift, and the panel
+blanks after `OLED_TIMEOUT` seconds (default 600) without a state change and
+wakes on the next one; clock and temperature ticks do not count. `m1132-oled --png out.png`
+renders one frame to a file for layout work without the hardware.
+
+## Wi-Fi fallback hotspot
+
+If no known network is reachable, NetworkManager raises the profile
+`AirPrint-hotspot` (SSID `AirPrint`, WPA2, 10.42.0.1/24, lowest autoconnect
+priority) so the Pi can still be reached; `install.sh` creates it with the
+key from `HOTSPOT_PSK=` (default `PrintMeNow!`, `none` to skip). While it is
+up the OLED shows `AP AirPrint`, and the `m1132-wifi-recover` timer retries
+the normal network every 10 minutes, since the radio cannot scan in AP mode.
+
 ## Networking on the Zero 2 W
 
-- The radio is 2.4 GHz only and the PCB antenna is weak: an AP the Mac sees
-  at full strength can be -90 dBm at the Pi. Below about -80 dBm association
-  times out (`wpa_supplicant` logs `reason=3 locally_generated=1`) and the
-  router never sees the client. Move the Pi or use ethernet.
+- The radio is 2.4 GHz only and the PCB antenna is weak, but the usual
+  failure is not signal: against a WPA2/WPA3 mixed-mode AP every join ends
+  in `Authentication with <bssid> timed out` and the AP never logs the
+  client, even at -60 dBm. The firmware advertises WPA3 SAE and a
+  firmware-side 4-way handshake, NetworkManager therefore selects SAE, and
+  the BCM43430 completes neither. Raspberry Pi OS already
+  masks some of this in `/usr/lib/modprobe.d/rpi-brcmfmac.conf`
+  (`feature_disable=0x282000`) but leaves SAE_EXT on. `install.sh` installs
+  `rpi-brcmfmac.conf` into `/etc/modprobe.d/`, which overrides the system
+  file by name and adds bit 25 (`feature_disable=0x02282000`), then rebuilds
+  the initramfs; after a reboot the Pi joins as plain WPA2-PSK. To confirm, run
+  `wpa_cli -i wlan0 log_level DEBUG` and look for `using KEY_MGMT WPA-PSK`
+  instead of `SAE`; `cat /sys/kernel/debug/ieee80211/phy0/features` must
+  not list `SAE_EXT`.
 - Imager writes `cfg80211.ieee80211_regdom=US` into cmdline.txt. US hides
   channels 12 and 13; set your country (`raspi-config nonint do_wifi_country
   PL`, and fix cmdline.txt) or the SSID is invisible.
