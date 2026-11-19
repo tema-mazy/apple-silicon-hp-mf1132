@@ -91,11 +91,12 @@ def wifi():
     for line in read("/proc/net/wireless").splitlines():
         if line.strip().startswith("wlan0:"):
             level = int(float(line.split()[3]))
-            for row in sh("nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi", "list",
-                          "--rescan", "no").splitlines():
-                if row.startswith("yes:"):
-                    return row[4:], level
-            return "?", level
+            # SSID of the active profile; the scan cache is not reliable right
+            # after a (re)connect, the profile is.
+            active = sh("nmcli", "-t", "-f", "GENERAL.CONNECTION", "dev", "show", "wlan0")
+            active = active.strip().split(":", 1)[-1]
+            ssid = sh("nmcli", "-t", "-g", "802-11-wireless.ssid", "con", "show", active).strip()
+            return ssid or active or "?", level
     return "", None
 
 
@@ -139,10 +140,12 @@ def frame(fonts, queue):
     img = Image.new("1", (W, H), 0)
     d = ImageDraw.Draw(img)
     big, small, label = fonts
+    x0 = 2
+    value_x = x0 + d.textlength("Print:", font=label) + 4
 
     def row(y, name, value):
         d.text((x0, y), name, font=label, fill=1)
-        d.text((x0 + d.textlength(name, font=label) + 3, y), value, font=small, fill=1)
+        d.text((value_x, y), value, font=small, fill=1)
 
     ssid, rssi = wifi()
     ip_w, ip_e = iface_ip("wlan0"), iface_ip("eth0")
@@ -151,7 +154,6 @@ def frame(fonts, queue):
     if hotspot_active():
         ssid, rssi, link = "AP " + HOTSPOT_SSID, None, "AP"
 
-    x0 = 2
     d.text((x0, 1), os.uname().nodename, font=big, fill=1)
     temp = read("/sys/class/thermal/thermal_zone0/temp")
     clock = time.strftime("%H:%M")
