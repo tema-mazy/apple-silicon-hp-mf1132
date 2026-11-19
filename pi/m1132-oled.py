@@ -133,20 +133,16 @@ def default_queue():
     return m.group(1) if m else ""
 
 
-def uptime():
-    s = int(float(read("/proc/uptime", "0 0").split()[0]))
-    d, s = divmod(s, 86400)
-    h, s = divmod(s, 3600)
-    m = s // 60
-    return f"{d}d {h:02d}:{m:02d}" if d else f"{h:02d}:{m:02d}"
-
-
 def frame(fonts, queue):
     """Render the status; returns (image, state) where state changes only when
-    something worth waking the display for changes (not uptime/temperature)."""
+    something worth waking the display for changes (not clock/temperature)."""
     img = Image.new("1", (W, H), 0)
     d = ImageDraw.Draw(img)
-    big, small = fonts
+    big, small, label = fonts
+
+    def row(y, name, value):
+        d.text((x0, y), name, font=label, fill=1)
+        d.text((x0 + d.textlength(name, font=label) + 3, y), value, font=small, fill=1)
 
     ssid, rssi = wifi()
     ip_w, ip_e = iface_ip("wlan0"), iface_ip("eth0")
@@ -158,7 +154,8 @@ def frame(fonts, queue):
     x0 = 2
     d.text((x0, 1), os.uname().nodename, font=big, fill=1)
     temp = read("/sys/class/thermal/thermal_zone0/temp")
-    t = f"{uptime()} {int(temp) // 1000}C" if temp else uptime()
+    clock = time.strftime("%H:%M")
+    t = f"{clock} {int(temp) // 1000}C" if temp else clock
     d.text((W - 3 - d.textlength(t, font=small), 3), t, font=small, fill=1)
     d.text((x0, 15), f"{link} {ip}", font=small, fill=1)
     if ssid and rssi is None:
@@ -170,16 +167,17 @@ def frame(fonts, queue):
     d.text((x0, 26), wl, font=small, fill=1)
     d.line((x0, 38, W - 3, 38), fill=1)
     pr = printer(queue)
-    d.text((x0, 41), f"Print {pr}", font=small, fill=1)
+    row(41, "Print:", pr)
     scan = sh("systemctl", "is-active", "m1132-escl").strip() or "unknown"
-    d.text((x0, 52), f"Scan  {scan}", font=small, fill=1)
+    row(52, "Scan:", scan)
     # RSSI wobbles all the time; bucket it so it does not keep the panel awake.
     state = (link, ip, ssid, None if rssi is None else rssi // 10, pr, scan)
     return img, state
 
 
 def main():
-    fonts = (ImageFont.truetype(FONT_BOLD, 12), ImageFont.truetype(FONT, 10))
+    fonts = (ImageFont.truetype(FONT_BOLD, 12), ImageFont.truetype(FONT, 10),
+             ImageFont.truetype(FONT_BOLD, 10))
     queue = os.environ.get("QUEUE") or default_queue()
 
     if len(sys.argv) == 3 and sys.argv[1] == "--png":

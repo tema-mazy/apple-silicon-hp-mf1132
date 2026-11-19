@@ -101,7 +101,7 @@ iPhone: Share > Print.
 ## OLED status display
 
 Optional: a 128x64 SSD1306 OLED on I2C (the common 0.96 inch GM009605
-module) shows host name, uptime, temperature, IP and Wi-Fi signal, printer
+module) shows host name, time, temperature, IP and Wi-Fi signal, printer
 state (idle / printing N / stopped / no USB) and the scanner service.
 `install.sh` enables I2C, installs `m1132-oled` and its service; the
 service retries every 30 s until a display answers, so it can be wired
@@ -116,7 +116,7 @@ VCC -> pin 1 (3.3V)    GND -> pin 6    SCL -> pin 5 (GPIO3)    SDA -> pin 3 (GPI
 `Environment=I2C_ADDR=0x3d` to the service. Burn-in care is built in: low
 contrast (`OLED_CONTRAST`, default 0x40), a slow pixel shift, and the panel
 blanks after `OLED_TIMEOUT` seconds (default 600) without a state change and
-wakes on the next one; uptime and temperature ticks do not count. `m1132-oled --png out.png`
+wakes on the next one; clock and temperature ticks do not count. `m1132-oled --png out.png`
 renders one frame to a file for layout work without the hardware.
 
 ## Wi-Fi fallback hotspot
