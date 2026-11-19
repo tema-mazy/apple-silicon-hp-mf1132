@@ -1,0 +1,9 @@
+[Unit]
+Description=Every 10 min: leave the fallback hotspot if the normal Wi-Fi is back
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target

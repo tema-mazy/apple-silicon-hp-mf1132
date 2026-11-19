@@ -1,0 +1,7 @@
+[Unit]
+Description=Retry the normal Wi-Fi while the AirPrint fallback hotspot is up
+After=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/m1132-wifi-recover
