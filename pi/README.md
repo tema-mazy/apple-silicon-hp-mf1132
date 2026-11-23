@@ -82,6 +82,7 @@ On the Mac:
 
 ```
 dns-sd -B _ipp._tcp local.        # queue appears as "HP LaserJet M1132 MFP @ m1132"
+                                  # (and "HP LaserJet P1006 @ m1132", see below)
 dns-sd -B _uscan._tcp local.      # scanner appears as "HP LaserJet M1132 MFP (m1132)"
 ```
 
@@ -97,6 +98,30 @@ iPhone: Share > Print.
 - Runs as user `m1132-escl` with USB access through the `scanner` group.
 - libjpeg is linked dynamically (same Debian on both sides).
 - The PDF output is a hand-written single-page PDF wrapping the JPEG.
+
+## HP LaserJet P1006
+
+The same Pi can also serve an HP LaserJet P1006, on its own or next to the
+M1132 (a USB hub on the OTG port). `install.sh` adds a queue for each
+printer it finds: `HP_M1132` and `HP_P1006` (`P1006_QUEUE=` and `P1006_URI=`
+override). Both shared queues show up on the LAN for AirPrint.
+
+- Printing: the same `hpcups` binary. The P1006 speaks ZxStream (XQX), which
+  HPLIP encodes with the same JBIG function `src/hpjbig.c` replaces, so it
+  needs no extra code. The PPD is the stock HPLIP one.
+- Firmware: the P1006 keeps no firmware. It has to be sent again after every
+  power-on, and it exists only in HP's proprietary plugin. Download
+  `hplip-3.26.6-plugin.run` from https://developers.hp.com/hp-linux-imaging-and-printing/plugins
+  into `vendor/` (not committed, checked by sha256). `build.sh` then
+  extracts `hp_laserjet_p1006.fw.gz` into `pi/out/` without running the
+  plugin's installer.
+- On the Pi, `61-hp-fw-upload.rules` starts `hp-fw-upload@p1006.service`
+  whenever the printer appears on USB. The service runs `hp-fw-upload`,
+  which sends the firmware over libusb (python3-usb). It skips a printer
+  whose IEEE 1284 device ID already reports `FWVER`. Check with
+  `journalctl -u hp-fw-upload@p1006`.
+- A job queued while the printer is off may reach it before the firmware
+  does when it powers on. Cancel and resend it if the first page fails.
 
 ## OLED status display
 
