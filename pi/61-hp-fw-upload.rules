@@ -1,0 +1,4 @@
+# HP LaserJet P1006: no firmware of its own, it needs a fresh copy after every
+# power-on. Start hp-fw-upload@p1006.service when it appears on USB. Matched by
+# product string; the USB product ID varies between HP's own tables.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="03f0", ATTR{product}=="*P1006*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hp-fw-upload@p1006.service"

@@ -1,0 +1,7 @@
+[Unit]
+Description=Send firmware to the HP LaserJet %i
+# Started by 61-hp-fw-upload.rules each time the printer appears on USB.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hp-fw-upload %i /usr/local/share/hp-firmware/hp_laserjet_%i.fw.gz
